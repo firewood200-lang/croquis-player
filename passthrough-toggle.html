@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: transparent;
+    overflow: hidden;
+    display: flex;
+    -webkit-app-region: drag; /* 위성 창 자체를 살짝 드래그로 옮길 수 있게(선택 사항) */
+  }
+  .btn {
+    width: 42px; height: 36px; margin: 3px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    background: rgba(20,20,20,0.92);
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-app-region: no-drag;
+    transition: background .1s ease, opacity .16s ease;
+    /* 2026-07-17: 이 위성 창도 메인 창의 다른 버튼들처럼 평소엔 숨겨두고, 마우스가 그림 위에
+       있을 때만(메인 창에서 넘어오는 mainHover) 보이게 한다.
+       2026-07-21에는 "앱을 막 켰을 때 안 보인다"는 문제를 여기서(항상 보이게) 임시로 덮었었는데,
+       진짜 원인은 이 창이 아니라 메인 창 쪽 mouseenter 이벤트가 커서가 이미 안에 있는 상태에서는
+       발생하지 않는 것이었다(2026-07-22, renderer.js의 mousemove 보완 참고). 원인을 고쳤으니
+       이 버튼도 원래 의도대로 hover 때만 보이는 방식으로 되돌린다. */
+    opacity: 0; pointer-events: none;
+  }
+  body:hover .btn, body.mainHover .btn { opacity: 1; pointer-events: auto; }
+  .btn:hover { background: rgba(40,40,40,0.95); }
+  .btn.active {
+    background: rgba(124,159,255,0.32);
+    border-color: rgba(124,159,255,0.55);
+  }
+  /* 통과 모드만 켜졌을 때 경고색(주황)으로 - 클릭이 그대로 뚫고 지나가는 상태임을 구분되게 표시 */
+  #btnPassthrough.active {
+    background: rgba(217,90,60,0.92);
+    border-color: rgba(217,90,60,0.92);
+  }
+  .btn .key {
+    font-size: 8px; line-height: 1; font-weight: 600; letter-spacing: .02em;
+    color: #bbb;
+  }
+  #btnPassthrough.active .key { color: rgba(255,255,255,0.9); }
+</style>
+</head>
+<body>
+<div id="btnRef" class="btn active" title="레퍼런스 표시 끄기 — 통과 모드 중에도 항상 눌립니다 (단축키 G)"><span class="icon">👁</span><span class="key">G</span></div>
+<div id="btnPassthrough" class="btn" title="통과 모드 켜기/끄기 — 켜면 이 작은 버튼 창만 클릭이 되고, 나머지(크로키 창)는 마우스·펜을 그대로 아래 창(클립스튜디오 등)으로 흘려보냅니다 (F9)"><span class="icon">✏️</span><span class="key">F9</span></div>
+<script>
+// ── 통과 모드 ──
+const btnPassthrough = document.getElementById('btnPassthrough');
+let passthroughActive = false;
+function setPassthroughUI(v){
+  passthroughActive = v;
+  btnPassthrough.classList.toggle('active', v);
+  btnPassthrough.title = v
+    ? '통과 모드 끄기 — 크로키 창이 다시 마우스·펜을 받습니다 (F9)'
+    : '통과 모드 켜기 — 크로키 창이 마우스·펜을 그대로 아래 창(클립스튜디오 등)으로 흘려보냅니다 (F9)';
+}
+btnPassthrough.addEventListener('click', async () => {
+  const result = await window.toggleAPI.setPassthrough(!passthroughActive);
+  setPassthroughUI(result);
+});
+window.toggleAPI.onPassthroughChanged((v) => setPassthroughUI(v));
+
+// ── 레퍼런스 표시 on/off ── 이 위성 창은 통과 모드와 무관하게 항상 클릭되므로,
+// 통과 모드가 켜진 동안에도(mainWindow 자체는 클릭을 못 받는 상태여도) 이 버튼으로는 항상 켜고 끌 수 있다.
+const btnRef = document.getElementById('btnRef');
+let refActive = true;
+function setRefUI(v){
+  refActive = v;
+  btnRef.classList.toggle('active', v);
+  btnRef.title = v
+    ? '레퍼런스 표시 끄기 — 통과 모드 중에도 항상 눌립니다 (단축키 G)'
+    : '레퍼런스 표시 켜기 — 통과 모드 중에도 항상 눌립니다 (단축키 G)';
+}
+btnRef.addEventListener('click', async () => {
+  const result = await window.toggleAPI.setRefVisible(!refActive);
+  setRefUI(result);
+});
+window.toggleAPI.onRefVisibleChanged((v) => setRefUI(v));
+
+// ── 메인 창(그림) hover 연동 (2026-07-17) ──
+// 이 창 자체를 hover했을 때(body:hover)뿐 아니라, 메인 창 위에 마우스가 있을 때도 버튼이
+// 같이 나타나도록 body에 mainHover 클래스를 반영한다.
+window.toggleAPI.onMainHoverChanged((v) => {
+  document.body.classList.toggle('mainHover', v);
+});
+</script>
+</body>
+</html>

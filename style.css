@@ -1,0 +1,196 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #090909; color: #e8e8e8; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; user-select: none; }
+
+/* 전체 앱 영역을 드래그 가능하게 */
+#app { position: fixed; inset: 0; background: #090909; overflow: hidden; -webkit-app-region: drag; }
+
+#imageView { width: 100%; height: 100%; object-fit: contain; display: none; -webkit-app-region: no-drag; -webkit-user-drag: none; transform-origin: 50% 50%; will-change: transform; filter: url(#croquisLevels); }
+#imageView.cover { object-fit: cover; }
+#imageView.none { object-fit: none; }
+
+/* 동영상은 확대/이동(줌·팬) 없이 항상 화면 비율에 맞춰 표시 - 프레임 단위로 살펴보는 용도라 확대 기능은 우선 제외 */
+#videoView { width: 100%; height: 100%; object-fit: contain; display: none; -webkit-app-region: no-drag; filter: url(#croquisLevels); }
+
+/* 프레임 이동/재생속도 조절 바 - 동영상일 때만(.show) 하단바 위쪽에 나타남. 평소(이미지 볼 때)엔 display:none으로 완전히 숨김 */
+#videoControls { display: none; bottom: 52px; justify-content: center; }
+#videoControls.show { display: flex; }
+#videoControls #videoSeek { flex: 1 1 120px; min-width: 60px; accent-color: #6a9bd8; }
+#videoControls #videoTime { font-variant-numeric: tabular-nums; color: #ccc; font-size: 12px; white-space: nowrap; }
+#videoControls select { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #eee; border-radius: 9px; padding: 6px 8px; }
+
+/* 2026-07-21: 다른 동영상 플레이어들처럼 화면 중앙에 크고 반투명한 재생 버튼을 표시 - 동영상일
+   때만(renderer.js가 .show를 붙여줌) 나타난다.
+   - 일시정지 중: 항상 또렷하게 보이고 클릭 가능(다시 재생하라는 의미).
+   - 재생 중: 평소엔 완전히 숨겨서(그림을 안 가리게) 안 보이다가, 마우스를 창 위 아무 곳에나
+     올리면(다른 hoverPanel/cornerBtn들과 같은 body:hover 방식) 그때만 나타나고 클릭도 그때만 된다.
+     버튼 위에 직접 마우스를 올리면 더 또렷해진다. */
+#centerPlayBtn {
+  display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 88px; height: 88px; padding: 0;
+  align-items: center; justify-content: center;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,.55);
+  background: rgba(10,10,10,.4); color: #fff; font-size: 34px; line-height: 1;
+  z-index: 22; opacity: 0; pointer-events: none; transition: opacity .18s ease, background .12s ease;
+}
+#centerPlayBtn.show { display: flex; }
+#centerPlayBtn.show.paused { opacity: .92; pointer-events: auto; }
+body:hover #centerPlayBtn.show:not(.paused) { opacity: .85; pointer-events: auto; }
+#centerPlayBtn.show:hover { opacity: 1; background: rgba(20,20,20,.55); }
+/* ▶(재생) 삼각형은 좌우 대칭이 아니라서 원 한가운데 그대로 두면 살짝 왼쪽으로 치우쳐 보인다 -
+   일시정지 아이콘(⏸, 좌우 대칭)에는 이 보정이 필요 없어서 재생 아이콘일 때만 살짝 오른쪽으로 민다. */
+#centerPlayIcon.iconPlay { margin-left: 6px; }
+
+#zoomBadge { position: fixed; top: 42px; left: 18px; z-index: 20; padding: 6px 10px; border-radius: 10px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.14); color: #ccc; font-size: 12px; -webkit-app-region: no-drag; opacity: 0; transition: opacity .15s ease; pointer-events: none; }
+#zoomBadge.show { opacity: 1; }
+
+#emptyState { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #777; letter-spacing: .08em; gap: 10px; -webkit-app-region: drag; }
+.emptyTitle { font-size: 22px; color: #bbb; }
+.emptyText { font-size: 13px; color: #666; text-align: center; line-height: 1.8; }
+
+#timerBadge { display: none; position: fixed; top: 42px; right: 18px; z-index: 20; padding: 8px 12px; border-radius: 12px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.14); color: #eee; font-family: "Courier New", monospace; font-size: 19px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px #000; -webkit-app-region: no-drag; }
+/* 시작 버튼을 눌러 타이머가 돌아가는 동안에만 표시(2026-07-17). 정지/초기 상태에서는 숨김. */
+#timerBadge.show { display: block; }
+#timerBadge.warning { color: #ffb099; border-color: rgba(255,80,40,.55); background: rgba(55,0,0,.48); }
+
+#redFlash { position: fixed; inset: 0; background: rgba(255,0,0,var(--flash-alpha, .24)); opacity: 0; pointer-events: none; z-index: 15; }
+#redFlash.active { animation: redPulse .75s infinite; }
+@keyframes redPulse { 0%,100% { opacity: 0; } 50% { opacity: 1; } }
+
+.hoverPanel { position: fixed; left: 10px; right: 10px; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid rgba(255,255,255,.12); background: rgba(14,14,14,.88); backdrop-filter: blur(10px); opacity: 0; transform: translateY(-8px); pointer-events: none; transition: opacity .16s ease, transform .16s ease; border-radius: 12px; -webkit-app-region: no-drag; }
+body:hover .hoverPanel, body.menuPinned .hoverPanel { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+/* 버튼 크기를 줄이는 것만으로는 폭이 좁은 창에서 여전히 최소화/닫기가 화면 밖으로 밀려났다.
+   그래서 구조 자체를 나눴다: 이미지~설정 버튼들은 topBarScroll 안에서만 필요하면 가로
+   스크롤되고, 최소화(－)·닫기(×)는 topBarFixed로 따로 빼서 flex-shrink:0으로 절대
+   줄어들거나 밀려나지 않게 해, 창이 아무리 좁아져도 항상 화면 안에 보이게 한다. */
+#topBar { top: 48px; flex-wrap: nowrap; gap: 4px; padding: 6px; overflow-x: visible; }
+#topBar button { font-size: 12px; padding: 5px 8px; }
+#topBarScroll {
+  display: flex; align-items: center; gap: 4px;
+  flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none;
+}
+#topBarScroll::-webkit-scrollbar { display: none; }
+#topBarFixed { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+#bottomBar { bottom: 10px; justify-content: space-between; transform: translateY(8px); font-size: 12px; color: #aaa; flex-wrap: nowrap; }
+
+/* 버튼 줄 위에 전용 드래그 손잡이 바 - 버튼을 누르다 실수로 창이 끌리지 않도록, 창 이동은 이 바에서만 하게 분리했다. 잡기 쉽도록 두껍게 */
+/* 중요: transform이 걸린 요소는 크로미움에서 app-region:drag가 무시된다 - .hoverPanel의 슬라이드 애니메이션(transform)이
+   원인이었으므로, 이 손잡이만 transform 없이 opacity로만 나타나게 한다 */
+#dragHandle { top: 10px; height: 30px; padding: 0; justify-content: center; -webkit-app-region: drag; cursor: move; transform: none !important; }
+#dragHandle::before { content: ""; width: 90px; height: 7px; border-radius: 4px; background: rgba(255,255,255,.32); }
+#dragHandle:hover::before { background: rgba(255,255,255,.5); }
+
+/* 상단바 빈 공간을 드래그 핸들로 - 창이 좁아지면 0까지 줄어들 수 있게 min-width:0 */
+.dragRegion { flex: 1 1 0; min-width: 0; -webkit-app-region: drag; height: 100%; min-height: 32px; cursor: move; }
+
+/* 버튼은 드래그 안 됨 */
+button, select, input, .nodrag { -webkit-app-region: no-drag; }
+button { border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06); color: #eee; border-radius: 9px; padding: 7px 10px; cursor: pointer; font: inherit; flex-shrink: 0; white-space: nowrap; }
+button:hover { background: rgba(255,255,255,.13); }
+/* 버튼 자체는 글자가 잘리지 않게 유지하고, 다 안 들어가면 줄바꿈 대신 가로 스크롤로 처리 (위치가 안 튀도록).
+   topBar 자체는 이제 스크롤시키지 않는다(overflow-x:visible, 위 규칙 참고) - 대신 그 안의
+   topBarScroll 그룹만 스크롤되어, topBarFixed(최소화·닫기)는 항상 잘리지 않고 보인다. */
+#bottomBar { overflow-x: auto; scrollbar-width: none; }
+#bottomBar::-webkit-scrollbar { display: none; }
+select, input { font: inherit; }
+#btnClose { color: #ffb0b0; }
+button.active { background: rgba(120,170,255,.35); border-color: rgba(150,190,255,.6); }
+
+/* 📌 항상 위 고정 버튼 - 이모지라 CSS color로는 상태 변화가 안 보여서, 배경/투명도로 켜짐·꺼짐을 구분한다 */
+#btnPin { opacity: .4; }
+#btnPin.active { opacity: 1; }
+
+/* 툴바에서 바로 여는 레벨 조정 패널(신규) - 설정창을 안 거치고 흑백/블랙-화이트/감마를 빠르게 조절 */
+#levelsPanel {
+  display: none; position: fixed; top: 56px; left: 10px; z-index: 31;
+  flex-direction: column; gap: 6px; padding: 10px 14px; min-width: 220px;
+  border: 1px solid rgba(255,255,255,.12); background: rgba(14,14,14,.92); backdrop-filter: blur(10px);
+  border-radius: 12px; -webkit-app-region: no-drag; font-size: 12px; color: #ddd;
+}
+#levelsPanel.show { display: flex; }
+#levelsPanel label { display: flex; flex-direction: column; gap: 2px; }
+#levelsPanel input[type=range] { width: 100%; }
+#levelsPanel button { align-self: flex-end; padding: 4px 9px; font-size: 11px; }
+
+dialog { width: min(760px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; border: 1px solid #333; border-radius: 18px; background: #141414; color: #eee; padding: 0; box-shadow: 0 20px 60px rgba(0,0,0,.55); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+#settingsForm { padding: 18px; }
+.dialogHeader, .dialogFooter { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+section { margin: 18px 0; padding: 14px; border: 1px solid #2c2c2c; border-radius: 14px; background: #101010; }
+h3 { margin: 0 0 12px; font-size: 15px; color: #ddd; }
+.row, .presetRow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+label { display: flex; align-items: center; gap: 8px; color: #bbb; font-size: 13px; }
+input[type="number"], select { background: #090909; border: 1px solid #333; color: #eee; border-radius: 8px; padding: 8px; }
+#playlistSelect, #imageList { width: 100%; }
+#imageList { background: #090909; color: #ddd; border: 1px solid #333; border-radius: 10px; padding: 8px; }
+.ghostBtn { background: transparent; }
+@media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* 창이 좁아질수록 버튼을 줄바꿈하지 않고 대신 점점 작게 - 위치가 튀지 않도록 유지 */
+@media (max-width: 520px) {
+  #topBar, #bottomBar { gap: 4px; padding: 6px; }
+  #topBar button, #bottomBar span { font-size: 11px; padding: 5px 7px; }
+}
+@media (max-width: 380px) {
+  #topBar, #bottomBar { gap: 2px; padding: 4px; }
+  #topBar button { font-size: 10px; padding: 4px 5px; border-radius: 7px; }
+}
+
+/* 좌측하단 여백에 두는 투명도 버튼 - 통과 모드/레퍼런스 표시 버튼은 여기 없음 -
+   mainWindow가 클릭을 못 받는 상태가 되므로 둘 다 별도 위성 창(passthrough-toggle.html)에서 처리.
+   아래 치수는 그 위성 창의 버튼과 화면에서 정확히 같은 줄에 오도록 역산한 값이다:
+   위성 창은 높이 44px짜리 별도 BrowserWindow로 mainWindow 바닥에서 158px 위(b.height-158)에
+   놓이고, 그 안의 버튼은 margin:3px 안쪽이라 실제로는 화면 하단에서 119px~155px(버튼 높이 36px)
+   위치에 그려진다. 그래서 이 버튼도 bottom:119px, height:36px로 맞췄다.
+   (2026-07-17: 원래 bottom:7px였는데 #bottomBar(재생목록·카운터, bottom:10px)와 겹쳐 보인다는
+   피드백으로 한 칸 위(+44px, bottom:51px)로 올림 - 위성 창 위치도 main.js에서 같이 조정.
+   2026-07-21: 동영상 재생 중엔 #videoControls(재생/프레임/탐색바, bottom:52px)가 이 자리와
+   거의 같은 높이에 나타나서 서로 겹쳐 보인다는 피드백으로, videoControls 바 위로 완전히
+   벗어나도록 bottom:51px -> 100px -> 114px -> 130px로 세 차례 올렸다가, 너무 많이 올라와
+   애매해 보인다는 피드백으로 130px -> 110px(-20px)로 내리고, 다시 110px -> 113px(+3px) ->
+   119px(+6px)로 두 차례 미세 조정 - 위성 창도 main.js에서 같은 폭만큼 같이 조정.
+   2026-07-22: 위 119px은 동영상 재생 중(videoControls 있음) 기준으로 맞춘 값인데, 이미지를
+   볼 땐 videoControls가 아예 없어서 #bottomBar 위로 불필요하게 큰 공백이 생겼다. 기본값은
+   원래 겹침만 피하던 51px로 내리고, 동영상 재생 중(body.video-active)에만 119px을 쓴다 -
+   renderer.js의 showImage()가 video-active 클래스를 붙였다 뗐다 한다. 위성 창(G·F9)도
+   main.js의 positionToggleWindow()에서 같은 기준으로 같이 움직인다. */
+.cornerBtn {
+  position: fixed; bottom: 51px; z-index: 31;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  width: 42px; height: 36px; padding: 0;
+  background: rgba(14,14,14,.82); border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+  color: #ddd; -webkit-app-region: no-drag;
+  /* 2026-07-17: 상시 노출에서 다른 hoverPanel(topBar/bottomBar)들과 동일하게 마우스를 올렸을 때만
+     보이도록 변경 - 평소엔 그림만 보이게. */
+  opacity: 0; pointer-events: none; transition: opacity .16s ease;
+}
+body:hover .cornerBtn, body.menuPinned .cornerBtn { opacity: 1; pointer-events: auto; }
+/* 동영상 재생 중엔 #videoControls(bottom:52px)와 겹치지 않도록 더 위로 - 위 주석 참고 */
+body.video-active .cornerBtn { bottom: 119px; }
+.cornerBtn:hover { background: rgba(45,45,45,.92); }
+.cornerBtn.active { background: rgba(120,170,255,.30); border-color: rgba(150,190,255,.6); }
+.cornerBtnLeft { left: 10px; }
+.cornerBtnIcon { font-size: 15px; line-height: 1; }
+.cornerBtnVal { font-size: 9px; line-height: 1; opacity: .85; font-weight: 600; letter-spacing: .02em; }
+
+/* 2026-07-20: 캔버스 좌우의 이전/다음 화살표. 처음엔 다른 버튼들처럼 화면 전체에 마우스를 올리면
+   양쪽 다 보이는 방식이었는데, "그림보다 눈에 띄면 안 된다"는 피드백으로 예스24 이북 뷰어 스타일로
+   바꿈: 그 쪽 가장자리에 마우스가 가 있을 때만(renderer.js의 showNavLeft/showNavRight 참고) 얇고
+   흐린 화살표만 살짝 보이게 했다. */
+.navArrow {
+  position: fixed; top: 50%; transform: translateY(-50%); z-index: 25;
+  width: 40px; height: 76px; padding: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(15,15,15,.4); border: none;
+  color: rgba(255,255,255,.8); font-size: 24px; font-weight: 300; line-height: 1; font-family: inherit;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, background .12s ease;
+}
+body.showNavLeft #navPrev, body.showNavRight #navNext { opacity: 1; pointer-events: auto; }
+.navArrow:hover { background: rgba(15,15,15,.6); }
+.navArrow:disabled { opacity: 0 !important; pointer-events: none; }
+/* 배경 이미지가 밝아도(하얀 배경 등) 화살표 탭이 묻히지 않도록, 가장자리 쪽만 살짝 둥근 어두운 탭 모양으로 표시 */
+#navPrev { left: 0; border-radius: 0 10px 10px 0; }
+#navNext { right: 0; border-radius: 10px 0 0 10px; }
+
+/* 레퍼런스(이미지/동영상) 표시 끄기 - 타이머·재생목록 등 다른 상태는 그대로 두고 화면 표시만 잠깐 끈다 */
+body.refHidden #imageView, body.refHidden #videoView, body.refHidden #emptyState { opacity: 0; }

@@ -1,0 +1,11 @@
+# 무거운 파일 - 각 컴퓨터(집/회사)에 npm install로 새로 받고, git으로는 옮기지 않는다.
+node_modules/
+
+# electron-builder 빌드 결과물 - 필요할 때 build.bat으로 다시 만들면 되므로 git에는 안 올린다.
+dist/
+release/
+out/
+
+# OS/에디터 잡파일
+Thumbs.db
+.DS_Store

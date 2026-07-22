@@ -1,0 +1,36 @@
+{
+  "name": "croquis-reference-player",
+  "version": "1.0.0",
+  "description": "Croquis reference image player with timer, playlists, warning sound, always-on-top window.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.croquis.player",
+    "productName": "Croquis Player",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "installerLanguages": ["ko"],
+      "language": "1042"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-toggle.js",
+      "renderer.js",
+      "index.html",
+      "passthrough-toggle.html",
+      "style.css"
+    ]
+  }
+}

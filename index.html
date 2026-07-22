@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Croquis Reference Player</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 흑백/레벨 조정용 SVG 필터(신규). 화면에는 안 보이고, #imageView/#videoView의 CSS filter가 이걸 가리켜서 씀. -->
+  <svg width="0" height="0" style="position:absolute; overflow:hidden;" aria-hidden="true">
+    <filter id="croquisLevels" color-interpolation-filters="sRGB">
+      <feColorMatrix id="lvGray" type="saturate" values="1" result="gray"/>
+      <feComponentTransfer in="gray" result="lin">
+        <feFuncR id="lvLinearR" type="linear" slope="1" intercept="0"/>
+        <feFuncG id="lvLinearG" type="linear" slope="1" intercept="0"/>
+        <feFuncB id="lvLinearB" type="linear" slope="1" intercept="0"/>
+      </feComponentTransfer>
+      <feComponentTransfer in="lin">
+        <feFuncR id="lvGammaR" type="gamma" amplitude="1" exponent="1" offset="0"/>
+        <feFuncG id="lvGammaG" type="gamma" amplitude="1" exponent="1" offset="0"/>
+        <feFuncB id="lvGammaB" type="gamma" amplitude="1" exponent="1" offset="0"/>
+      </feComponentTransfer>
+    </filter>
+  </svg>
+  <div id="app">
+    <img id="imageView" alt="croquis reference" />
+    <video id="videoView" playsinline></video>
+    <!-- 2026-07-21: 다른 동영상 플레이어들처럼, 화면 중앙에 반투명 재생 버튼을 크게 표시 -
+         일시정지 중일 때만 보이고, 재생 중엔 사라진다(동영상일 때만 등장 - renderer.js 참고). -->
+    <button id="centerPlayBtn" class="centerPlayBtn nodrag" title="재생/일시정지"><span id="centerPlayIcon">▶</span></button>
+    <!-- 2026-07-20: 캔버스 위에 마우스를 올렸을 때만 나타나는 이전/다음 화살표 (상단 툴바의 이전/다음 버튼과 별도, 이미지 위에서 바로 넘기기용) -->
+    <button id="navPrev" class="navArrow nodrag" title="이전 그림 (←)">‹</button>
+    <button id="navNext" class="navArrow nodrag" title="다음 그림 (→)">›</button>
+    <div id="videoControls" class="hoverPanel">
+      <button id="btnFramePrev" class="nodrag" title="이전 프레임">⏮ 프레임</button>
+      <button id="btnVideoPlay" class="nodrag">▶</button>
+      <button id="btnFrameNext" class="nodrag" title="다음 프레임">프레임 ⏭</button>
+      <input id="videoSeek" class="nodrag" type="range" min="0" max="100" step="0.1" value="0">
+      <span id="videoTime" class="nodrag">00:00 / 00:00</span>
+      <select id="videoSpeedSelect" class="nodrag" title="재생 속도">
+        <option value="0.25">0.25x</option>
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+      </select>
+    </div>
+    <div id="emptyState">
+      <div class="emptyTitle">CROQUIS PLAYER</div>
+      <div class="emptyText">이미지나 폴더를 여기에 끌어다 놓거나<br>마우스를 올려 버튼을 사용하세요.</div>
+    </div>
+
+    <div id="redFlash"></div>
+    <div id="timerBadge">00:00</div>
+    <div id="zoomBadge">100%</div>
+
+    <div id="dragHandle" class="hoverPanel" title="여기를 잡고 창을 옮기세요"></div>
+    <div id="topBar" class="hoverPanel">
+      <div class="dragRegion"></div>
+      <!-- 버튼이 다 안 들어가는 창 너비에서는 이 안에서만 가로 스크롤되고, 최소화/닫기는
+           별도 그룹(topBarFixed)으로 빼서 창이 아무리 좁아도 항상 화면 안에 보이게 한다. -->
+      <div id="topBarScroll">
+        <button id="btnAddImages" class="nodrag">이미지</button>
+        <button id="btnAddFolder" class="nodrag">폴더</button>
+        <button id="btnPrev" class="nodrag">이전</button>
+        <button id="btnPlay" class="nodrag">시작</button>
+        <button id="btnNext" class="nodrag">다음</button>
+        <button id="btnGrayToggle" class="nodrag" title="흑백 모드 켜기/끄기">흑백</button>
+        <button id="btnLevelsPanel" class="nodrag" title="블랙/화이트 포인트, 감마 조정">레벨</button>
+        <button id="btnPin" class="nodrag" title="항상 위 고정 켜기/끄기">📌</button>
+        <button id="btnSettings" class="nodrag">설정</button>
+      </div>
+      <div id="topBarFixed">
+        <button id="btnMin" class="nodrag">－</button>
+        <button id="btnClose" class="nodrag">×</button>
+      </div>
+    </div>
+
+    <div id="levelsPanel" class="nodrag">
+      <label>블랙 포인트 <span id="levelBlackVal">0</span>
+        <input id="levelBlackInput" type="range" min="0" max="254" step="1" value="0">
+      </label>
+      <label>감마(중간톤) <span id="levelGammaVal">1.00</span>
+        <input id="levelGammaInput" type="range" min="10" max="300" step="1" value="100">
+      </label>
+      <label>화이트 포인트 <span id="levelWhiteVal">255</span>
+        <input id="levelWhiteInput" type="range" min="1" max="255" step="1" value="255">
+      </label>
+      <button type="button" id="btnResetLevels">초기화</button>
+    </div>
+    <!-- 체크박스는 화면에 안 보이지만, 기존 흑백/레벨 값 저장·미리보기 로직(renderer.js)이
+         이 id를 그대로 참조하므로 상태 값만 들고 있는 용도로 남겨둔다. -->
+    <input id="grayscaleCheck" type="checkbox" style="display:none;">
+
+    <div id="bottomBar" class="hoverPanel">
+      <span id="playlistName">기본 재생목록</span>
+      <span id="imageCounter">0 / 0</span>
+      <span id="modeLabel">순서</span>
+    </div>
+
+    <!-- 좌측하단 여백을 쓰는 투명도 버튼 - 다른 hoverPanel들과 마찬가지로 마우스를 올렸을 때만
+         보인다(2026-07-17부터, 그림만 보이게 하기 위해 상시노출에서 변경).
+         레퍼런스 표시 on/off 버튼은 여기 없음 - 통과 모드 중엔 이 창 자체가 클릭을 못 받으므로,
+         우측하단 위성 창(F9 옆의 👁 버튼)에서만 처리한다. 예전엔 이 창에도 같은 버튼을 하나 더
+         뒀는데, 위성 창 버튼과 겹쳐 보이고 통과 모드 중엔 어차피 눌리지도 않아 중복이라 뺐다. -->
+    <button id="btnOpacity" class="cornerBtn cornerBtnLeft nodrag" title="창 투명도 조절 (클릭마다 100→80→60→40%로 순환)">
+      <span class="cornerBtnIcon">◐</span><span class="cornerBtnVal" id="opacityVal">100%</span>
+    </button>
+  </div>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" id="settingsForm">
+      <div class="dialogHeader">
+        <strong>설정</strong>
+        <button value="close" class="ghostBtn">닫기</button>
+      </div>
+
+      <section>
+        <h3>재생목록</h3>
+        <div class="row">
+          <select id="playlistSelect"></select>
+          <button type="button" id="btnNewPlaylist">새 목록</button>
+          <button type="button" id="btnRenamePlaylist">이름 변경</button>
+          <button type="button" id="btnDeletePlaylist">삭제</button>
+        </div>
+        <div class="row">
+          <button type="button" id="btnListAddImages">이미지 추가</button>
+          <button type="button" id="btnListAddFolder">폴더 추가</button>
+          <button type="button" id="btnRemoveImage">선택 제거</button>
+          <button type="button" id="btnClearImages">목록 비우기</button>
+        </div>
+        <select id="imageList" size="8"></select>
+      </section>
+
+      <section>
+        <h3>시간</h3>
+        <div class="grid2">
+          <label>기본 시간(초)<input id="durationInput" type="number" min="5" value="120"></label>
+          <label>경고 시작(초 전)<input id="warningInput" type="number" min="1" value="30"></label>
+        </div>
+        <div class="presetRow">
+          <button type="button" data-time="30">30초</button>
+          <button type="button" data-time="60">1분</button>
+          <button type="button" data-time="120">2분</button>
+          <button type="button" data-time="300">5분</button>
+          <button type="button" data-time="600">10분</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>보기 / 재생</h3>
+        <div class="grid2">
+          <label><input id="alwaysTopCheck" type="checkbox" checked> 항상 위</label>
+          <label><input id="randomCheck" type="checkbox"> 랜덤 재생</label>
+          <label><input id="repeatCheck" type="checkbox" checked> 반복 재생</label>
+          <label><input id="autoStartCheck" type="checkbox"> 실행 후 자동 시작</label>
+          <label><input id="menuAutoHideCheck" type="checkbox" checked> 마우스 오버 메뉴</label>
+        </div>
+        <label>이미지 맞춤 방식
+          <select id="fitSelect">
+            <option value="contain">비율 유지</option>
+            <option value="cover">화면 채우기</option>
+            <option value="none">원본 크기</option>
+          </select>
+        </label>
+        <label><input id="autoResizeCheck" type="checkbox"> 그림 비율에 맞게 창 크기 자동 조정 (여백 없이, 화면의 70% 이내로 제한)</label>
+      </section>
+
+      <section>
+        <h3>소리 / 경고 효과</h3>
+        <div class="grid2">
+          <label><input id="soundCheck" type="checkbox" checked> 소리 사용</label>
+          <label><input id="flashCheck" type="checkbox" checked> 붉은 점멸</label>
+          <label>볼륨<input id="volumeInput" type="range" min="0" max="1" step="0.01" value="0.35"></label>
+          <label>점멸 강도<input id="flashAlphaInput" type="range" min="0.05" max="0.65" step="0.01" value="0.24"></label>
+        </div>
+      </section>
+
+      <div class="dialogFooter">
+        <button type="button" id="btnSaveSettings">설정 저장</button>
+      </div>
+    </form>
+  </dialog>
+
+<script src="renderer.js"></script>
+</body>
+</html>
