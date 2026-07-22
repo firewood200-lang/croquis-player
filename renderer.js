@@ -179,19 +179,11 @@ async function showImage() {
     els.videoView.style.display = 'block';
     els.videoControls.classList.add('show');
     els.centerPlayBtn.classList.add('show');
-    // 2026-07-22: 동영상일 땐 #videoControls가 뜨므로, 투명도 버튼/위성 창(G·F9)을 그 위로
-    // 올려서 겹치지 않게 한다 - style.css의 body.video-active .cornerBtn과 짝을 이룬다.
-    document.body.classList.add('video-active');
-    window.croquisAPI.setVideoActive(true);
     applyVideoMirror(); // 좌우반전 상태를 새로 불러온 영상에도 그대로 유지
   } else {
     stopCurrentVideo();
     els.videoControls.classList.remove('show');
     els.centerPlayBtn.classList.remove('show');
-    // 2026-07-22: 이미지일 땐 #videoControls가 없으므로, 투명도 버튼/위성 창을 굳이 높이
-    // 띄워둘 필요가 없다 - #bottomBar 바로 위로 내린다.
-    document.body.classList.remove('video-active');
-    window.croquisAPI.setVideoActive(false);
     // 창 크기 자동 조정이 켜져 있으면, 이미지가 실제로 로드된 뒤(원본 픽셀 크기를 알 수 있을 때) 창을 그 비율에 맞춰 다시 잡는다.
     // src를 넣기 전에 먼저 걸어둬야 캐시된 이미지가 곧바로 로드돼도 놓치지 않는다.
     els.imageView.onload = state.settings.autoResizeWindow

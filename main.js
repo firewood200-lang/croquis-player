@@ -10,9 +10,6 @@ let toggleWin; // 항상 클릭 가능한 작은 위성 창 — 통과 모드(�
 let passthrough = false;
 let refVisible = true; // 통과 모드 중에도(mainWindow가 클릭을 못 받는 상태에서도) 레퍼런스를
                         // 껐다 켤 수 있어야 해서, 메인 프로세스가 상태를 들고 두 창에 전파한다.
-let videoActive = false; // 2026-07-22: 지금 보고 있는 게 동영상인지 - 위성 창(G/F9 버튼) 위치를
-                          // 정할 때, 동영상 재생 중에만 #videoControls 위로 띄우고 이미지를 볼 때는
-                          // #bottomBar 바로 위로 내리기 위해 renderer.js가 알려주는 값을 들고 있는다.
 const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
 const videoExts = new Set(['.mp4', '.webm', '.mov', '.m4v']);
 const mediaExts = new Set([...imageExts, ...videoExts]);
@@ -132,28 +129,17 @@ function setRefVisible(value) {
   return refVisible;
 }
 
-// 2026-07-22: renderer.js가 이미지<->동영상 전환 때마다 알려주면, 위성 창(G/F9 버튼) 위치를
-// 그때그때 다시 계산한다 - positionToggleWindow() 참고.
-ipcMain.on('video-active-changed', (e, value) => {
-  videoActive = !!value;
-  positionToggleWindow();
-});
-
 function positionToggleWindow() {
   if (!mainWindow || !toggleWin) return;
   const b = mainWindow.getBounds();
   // 창의 우측 하단 여백에 겹쳐 놓는다 - 이미지가 꽉 찬 상태에서도 구석의 빈 공간을 쓰도록.
   // 2026-07-17: #bottomBar(재생목록·카운터 텍스트, bottom:10px)와 겹쳐 보인다는 피드백으로
   // 46 -> 90으로 한 칸(+44px) 올림. style.css의 .cornerBtn(투명도 버튼) bottom 값도 같이 맞춰뒀다.
-  // 2026-07-21: 동영상 재생 중 #videoControls(재생/프레임/탐색바)와 겹쳐 보인다는 피드백으로
-  // 그 바 위로 완전히 벗어나도록 90 -> 139 -> 153 -> 169로 여러 차례 올렸다가, 너무 많이 올라와
-  // 애매해 보인다는 피드백으로 169 -> 149(-20px)로 내리고, 다시 149 -> 152(+3px) -> 158(+6px)로
-  // 두 차례 미세 조정 - .cornerBtn도 같은 폭만큼 같이 조정.
-  // 2026-07-22: 위 158은 동영상 재생 중(videoControls가 떠 있을 때) 기준으로 맞춘 값이라,
-  // 이미지를 볼 때는 videoControls가 없는데도 같은 높이를 써서 #bottomBar 위에 불필요하게
-  // 큰 공백이 생겼다. videoActive가 꺼져 있으면(이미지 보는 중) 원래 겹침만 피하던 90으로
-  // 내리고, videoActive가 켜지면(동영상 재생 중) 158을 그대로 쓴다.
-  const offset = videoActive ? 158 : 90;
+  // 2026-07-21~22: 동영상 재생 중일 때만 #videoControls와 안 겹치게 90 -> 158까지 여러 차례
+  // 올렸다 내렸다 했었지만, 2026-07-23에 프레임바 자체를 상단 메뉴처럼 압축해 .cornerBtn과
+  // 같은 줄(하단바 바로 위, bottom:51px)에 넣는 통합 레이아웃으로 바꾸면서, 이미지/동영상
+  // 구분 없이 항상 같은 90으로 고정한다 - videoActive 분기(및 이를 위한 IPC)는 더 이상 필요 없어 제거.
+  const offset = 90;
   toggleWin.setPosition(Math.round(b.x + b.width - 104), Math.round(b.y + b.height - offset));
 }
 

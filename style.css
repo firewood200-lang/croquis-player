@@ -11,12 +11,21 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 /* 동영상은 확대/이동(줌·팬) 없이 항상 화면 비율에 맞춰 표시 - 프레임 단위로 살펴보는 용도라 확대 기능은 우선 제외 */
 #videoView { width: 100%; height: 100%; object-fit: contain; display: none; -webkit-app-region: no-drag; filter: url(#croquisLevels); }
 
-/* 프레임 이동/재생속도 조절 바 - 동영상일 때만(.show) 하단바 위쪽에 나타남. 평소(이미지 볼 때)엔 display:none으로 완전히 숨김 */
-#videoControls { display: none; bottom: 52px; justify-content: center; }
+/* 프레임 이동/재생속도 조절 바 (2026-07-23 재배치) - 동영상일 때만(.show) 나타남, 평소(이미지)엔 완전히 숨김.
+   왼쪽 투명도 버튼(.cornerBtnLeft, left:10~52px)과 오른쪽 위성 창(통과/레퍼런스 버튼, main.js에서
+   창 폭 기준 오른쪽 104px 자리에 배치)을 침범하지 않도록, 폭을 고정 숫자로 주지 않고 left/right만
+   지정해서 그 사이 남는 공간을 그대로 채운다 - 창 크기(이미지 비율)에 따라 자동으로 늘고 준다.
+   높이·위치도 투명도 버튼과 정확히 같은 줄(bottom:51px)에 오도록 맞춰서, 예전처럼 그 위에 따로 뜨는
+   두 번째 줄이 아니라 하나의 줄로 합쳐진다. */
+#videoControls {
+  display: none; bottom: 51px; left: 60px; right: 114px;
+  justify-content: center; padding: 4px 6px; gap: 4px;
+}
 #videoControls.show { display: flex; }
-#videoControls #videoSeek { flex: 1 1 120px; min-width: 60px; accent-color: #6a9bd8; }
-#videoControls #videoTime { font-variant-numeric: tabular-nums; color: #ccc; font-size: 12px; white-space: nowrap; }
-#videoControls select { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #eee; border-radius: 9px; padding: 6px 8px; }
+#videoControls button { font-size: 11px; padding: 4px 7px; }
+#videoControls #videoSeek { flex: 1 1 60px; min-width: 40px; accent-color: #6a9bd8; }
+#videoControls #videoTime { font-variant-numeric: tabular-nums; color: #ccc; font-size: 11px; white-space: nowrap; }
+#videoControls select { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #eee; border-radius: 8px; padding: 4px 6px; font-size: 11px; }
 
 /* 2026-07-21: 다른 동영상 플레이어들처럼 화면 중앙에 크고 반투명한 재생 버튼을 표시 - 동영상일
    때만(renderer.js가 .show를 붙여줌) 나타난다.
@@ -151,10 +160,11 @@ input[type="number"], select { background: #090909; border: 1px solid #333; colo
    애매해 보인다는 피드백으로 130px -> 110px(-20px)로 내리고, 다시 110px -> 113px(+3px) ->
    119px(+6px)로 두 차례 미세 조정 - 위성 창도 main.js에서 같은 폭만큼 같이 조정.
    2026-07-22: 위 119px은 동영상 재생 중(videoControls 있음) 기준으로 맞춘 값인데, 이미지를
-   볼 땐 videoControls가 아예 없어서 #bottomBar 위로 불필요하게 큰 공백이 생겼다. 기본값은
-   원래 겹침만 피하던 51px로 내리고, 동영상 재생 중(body.video-active)에만 119px을 쓴다 -
-   renderer.js의 showImage()가 video-active 클래스를 붙였다 뗐다 한다. 위성 창(G·F9)도
-   main.js의 positionToggleWindow()에서 같은 기준으로 같이 움직인다. */
+   볼 땐 videoControls가 아예 없어서 #bottomBar 위로 불필요하게 큰 공백이 생겼다는 피드백으로
+   한 번 image/video 상태에 따라 51px·119px을 오가게 만들었었다.
+   2026-07-23: 아예 videoControls 자체를 이 버튼과 같은 줄(bottom:51px)로 옮겨서(위 #videoControls
+   규칙 참고), 줄이 두 개로 나뉘던 문제를 근본적으로 없앴다. 그래서 이제 이 버튼은 이미지/동영상
+   구분 없이 항상 bottom:51px 하나로 고정 - body.video-active 관련 처리도 다 제거했다. */
 .cornerBtn {
   position: fixed; bottom: 51px; z-index: 31;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
@@ -166,8 +176,6 @@ input[type="number"], select { background: #090909; border: 1px solid #333; colo
   opacity: 0; pointer-events: none; transition: opacity .16s ease;
 }
 body:hover .cornerBtn, body.menuPinned .cornerBtn { opacity: 1; pointer-events: auto; }
-/* 동영상 재생 중엔 #videoControls(bottom:52px)와 겹치지 않도록 더 위로 - 위 주석 참고 */
-body.video-active .cornerBtn { bottom: 119px; }
 .cornerBtn:hover { background: rgba(45,45,45,.92); }
 .cornerBtn.active { background: rgba(120,170,255,.30); border-color: rgba(150,190,255,.6); }
 .cornerBtnLeft { left: 10px; }
