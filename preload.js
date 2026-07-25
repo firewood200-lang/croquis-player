@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('croquisAPI', {
   onPassthroughChanged: (callback) => ipcRenderer.on('passthrough-changed', (_event, value) => callback(value)),
   setRefVisible: (value) => ipcRenderer.invoke('window:setRefVisible', value),
   onRefVisibleChanged: (callback) => ipcRenderer.on('ref-visible-changed', (_event, value) => callback(value)),
+  toggleFullscreen: () => ipcRenderer.invoke('window:toggleFullscreen'),
+  exitFullscreen: () => ipcRenderer.invoke('window:exitFullscreen'),
+  onFullscreenChanged: (callback) => ipcRenderer.on('fullscreen-changed', (_event, value) => callback(value)),
   // 2026-07-17: 위성 창(통과 모드/레퍼런스 버튼)도 그림 위에 마우스가 있을 때 같이 나타나도록,
   // 이 창(mainWindow) 위에서의 hover 여부를 메인 프로세스에 알려 위성 창으로 전달한다.
   notifyHover: (value) => ipcRenderer.send('main-hover', value)

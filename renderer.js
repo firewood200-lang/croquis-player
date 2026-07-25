@@ -31,7 +31,7 @@ const state = {
 
 const els = {
   imageView: $('imageView'), emptyState: $('emptyState'), timerBadge: $('timerBadge'), redFlash: $('redFlash'), zoomBadge: $('zoomBadge'),
-  btnAddImages: $('btnAddImages'), btnAddFolder: $('btnAddFolder'), btnPrev: $('btnPrev'), btnPlay: $('btnPlay'), btnNext: $('btnNext'), btnSettings: $('btnSettings'), btnMin: $('btnMin'), btnClose: $('btnClose'), btnPin: $('btnPin'),
+  btnAddImages: $('btnAddImages'), btnAddFolder: $('btnAddFolder'), btnPrev: $('btnPrev'), btnPlay: $('btnPlay'), btnNext: $('btnNext'), btnSettings: $('btnSettings'), btnMin: $('btnMin'), btnClose: $('btnClose'), btnPin: $('btnPin'), btnFullscreen: $('btnFullscreen'),
   navPrev: $('navPrev'), navNext: $('navNext'),
   playlistName: $('playlistName'), imageCounter: $('imageCounter'), modeLabel: $('modeLabel'), settingsDialog: $('settingsDialog'), playlistSelect: $('playlistSelect'), imageList: $('imageList'),
   videoView: $('videoView'), videoControls: $('videoControls'), btnFramePrev: $('btnFramePrev'), btnVideoPlay: $('btnVideoPlay'), btnFrameNext: $('btnFrameNext'),
@@ -471,6 +471,15 @@ els.btnPin.onclick = async () => {
   els.btnPin.title = result ? '항상 위 고정 끄기' : '항상 위 고정 켜기';
   save();
 };
+els.btnFullscreen.onclick = async () => {
+  const isFull = await window.croquisAPI.toggleFullscreen();
+  els.btnFullscreen.classList.toggle('active', isFull);
+  els.btnFullscreen.title = isFull ? '전체화면 끄기 (F11, Esc)' : '전체화면 켜기 (F11)';
+};
+window.croquisAPI.onFullscreenChanged((value) => {
+  els.btnFullscreen.classList.toggle('active', value);
+  els.btnFullscreen.title = value ? '전체화면 끄기 (F11, Esc)' : '전체화면 켜기 (F11)';
+});
 
 // ---- 창 투명도(좌측하단 버튼) - 클립스튜디오 등 아래 창이 비쳐 보이도록 클릭마다 순환 ----
 // 통과 모드(F9, 우측하단 위성 창)와 함께 쓰면: 투명도를 낮춰 아래 창을 보면서, 통과 모드로
@@ -604,6 +613,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') nextImage(false);
   if (e.key === 'ArrowLeft') prevImage();
   if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey && !e.metaKey && !e.altKey) setRefVisible(!refVisible);
+  if (e.key === 'F11') { e.preventDefault(); els.btnFullscreen.click(); }
+  if (e.key === 'Escape') window.croquisAPI.exitFullscreen();
   // 좌우반전: 처음엔 F로 뒀다가(2026-07-17), F는 노트북/사무실 환경에서 이미 선점돼 있을 가능성이
   // 있다는 이유로 충돌 위험이 적은 Ctrl+Alt+U로 변경(2026-07-17). 다른 연동 앱(그리드, OBJ 배치
   // 뷰어)과 동일한 조합키.

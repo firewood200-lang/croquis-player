@@ -105,6 +105,10 @@ function createWindow() {
   mainWindow.on('minimize', () => toggleWin?.hide());
   mainWindow.on('restore', () => toggleWin?.show());
   mainWindow.on('closed', () => { toggleWin?.close(); toggleWin = null; });
+  // 전체화면 버튼(툴바) 상태 동기화 - OS 단축키나 다른 경로로 전체화면이 바뀌어도
+  // 렌더러의 버튼 활성 표시가 항상 실제 창 상태를 따라가게 한다.
+  mainWindow.on('enter-full-screen', () => mainWindow.webContents.send('fullscreen-changed', true));
+  mainWindow.on('leave-full-screen', () => mainWindow.webContents.send('fullscreen-changed', false));
 }
 
 // 통과(클릭 스루) 모드 — 켜면 mainWindow가 마우스·펜 입력을 그대로 아래 창(클립스튜디오 등)으로
@@ -219,6 +223,16 @@ ipcMain.handle('window:setOpacity', (_e, value) => {
 });
 ipcMain.handle('window:setPassthrough', (_e, value) => setPassthrough(value));
 ipcMain.handle('window:setRefVisible', (_e, value) => setRefVisible(value));
+ipcMain.handle('window:toggleFullscreen', () => {
+  if (!mainWindow) return false;
+  const next = !mainWindow.isFullScreen();
+  mainWindow.setFullScreen(next);
+  return next;
+});
+ipcMain.handle('window:exitFullscreen', () => {
+  if (mainWindow?.isFullScreen()) mainWindow.setFullScreen(false);
+  return false;
+});
 
 // 2026-07-17: 메인 창(그림) 위에 마우스가 있는지 위성 창(통과 모드/레퍼런스 버튼)에 전달 -
 // 위성 창 버튼이 "그림 위에 마우스를 올렸을 때"도 같이 나타나게 하기 위함(위성 창은 화면
