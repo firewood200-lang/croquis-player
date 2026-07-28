@@ -31,7 +31,7 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
    때만(renderer.js가 .show를 붙여줌) 나타난다.
    - 일시정지 중: 항상 또렷하게 보이고 클릭 가능(다시 재생하라는 의미).
    - 재생 중: 평소엔 완전히 숨겨서(그림을 안 가리게) 안 보이다가, 마우스를 창 위 아무 곳에나
-     올리면(다른 hoverPanel/cornerBtn들과 같은 body:hover 방식) 그때만 나타나고 클릭도 그때만 된다.
+     올리면(다른 hoverPanel/cornerBtn들과 같은 body.hoverActive 방식, 2026-07-27부터 :hover 대신 JS로 관리) 그때만 나타나고 클릭도 그때만 된다.
      버튼 위에 직접 마우스를 올리면 더 또렷해진다. */
 #centerPlayBtn {
   display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -43,7 +43,7 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 }
 #centerPlayBtn.show { display: flex; }
 #centerPlayBtn.show.paused { opacity: .92; pointer-events: auto; }
-body:hover #centerPlayBtn.show:not(.paused) { opacity: .85; pointer-events: auto; }
+body.hoverActive #centerPlayBtn.show:not(.paused) { opacity: .85; pointer-events: auto; }
 #centerPlayBtn.show:hover { opacity: 1; background: rgba(20,20,20,.55); }
 /* ▶(재생) 삼각형은 좌우 대칭이 아니라서 원 한가운데 그대로 두면 살짝 왼쪽으로 치우쳐 보인다 -
    일시정지 아이콘(⏸, 좌우 대칭)에는 이 보정이 필요 없어서 재생 아이콘일 때만 살짝 오른쪽으로 민다. */
@@ -66,7 +66,7 @@ body:hover #centerPlayBtn.show:not(.paused) { opacity: .85; pointer-events: auto
 @keyframes redPulse { 0%,100% { opacity: 0; } 50% { opacity: 1; } }
 
 .hoverPanel { position: fixed; left: 10px; right: 10px; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid rgba(255,255,255,.12); background: rgba(14,14,14,.88); backdrop-filter: blur(10px); opacity: 0; transform: translateY(-8px); pointer-events: none; transition: opacity .16s ease, transform .16s ease; border-radius: 12px; -webkit-app-region: no-drag; }
-body:hover .hoverPanel, body.menuPinned .hoverPanel { opacity: 1; transform: translateY(0); pointer-events: auto; }
+body.hoverActive .hoverPanel, body.menuPinned .hoverPanel { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
 /* 버튼 크기를 줄이는 것만으로는 폭이 좁은 창에서 여전히 최소화/닫기가 화면 밖으로 밀려났다.
    그래서 구조 자체를 나눴다: 이미지~설정 버튼들은 topBarScroll 안에서만 필요하면 가로
@@ -175,7 +175,7 @@ input[type="number"], select { background: #090909; border: 1px solid #333; colo
      보이도록 변경 - 평소엔 그림만 보이게. */
   opacity: 0; pointer-events: none; transition: opacity .16s ease;
 }
-body:hover .cornerBtn, body.menuPinned .cornerBtn { opacity: 1; pointer-events: auto; }
+body.hoverActive .cornerBtn, body.menuPinned .cornerBtn { opacity: 1; pointer-events: auto; }
 .cornerBtn:hover { background: rgba(45,45,45,.92); }
 .cornerBtn.active { background: rgba(120,170,255,.30); border-color: rgba(150,190,255,.6); }
 .cornerBtnLeft { left: 10px; }

@@ -99,7 +99,7 @@ function createWindow() {
     }
   });
 
-  mainWindow.on('move', positionToggleWindow);
+  mainWindow.on('move', () => { positionToggleWindow(); scheduleHoverCorrection(); });
   mainWindow.on('resize', positionToggleWindow);
   mainWindow.on('focus', () => toggleWin?.moveTop());
   mainWindow.on('minimize', () => toggleWin?.hide());
@@ -131,6 +131,23 @@ function setRefVisible(value) {
   mainWindow?.webContents.send('ref-visible-changed', refVisible);
   toggleWin?.webContents.send('ref-visible-changed', refVisible);
   return refVisible;
+}
+
+// 2026-07-27: 창을 드래그해서 옮긴 뒤 마우스 버튼을 창 "바깥"에서 놓으면, 렌더러가 그 사이에
+// 아무 이벤트도 못 받아서(OS가 네이티브 드래그를 처리하는 동안 렌더러 이벤트 스트림이 끊김)
+// 크로미움의 :hover 판정이 "커서가 계속 창 안에 있다"로 멈춰버리는 문제가 있었다(메뉴가 안
+// 사라지는 버그의 원인). 그래서 창이 움직임을 멈춘 직후(연속된 move 이벤트가 250ms간 없을 때)
+// 실제 커서의 화면 좌표를 확인해서, 창 밖에 있으면 렌더러에 "hover 아님"을 강제로 알려준다.
+let hoverCheckTimer = null;
+function scheduleHoverCorrection() {
+  clearTimeout(hoverCheckTimer);
+  hoverCheckTimer = setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const p = screen.getCursorScreenPoint();
+    const b = mainWindow.getBounds();
+    const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+    mainWindow.webContents.send('hover-correct', inside);
+  }, 250);
 }
 
 function positionToggleWindow() {
@@ -193,6 +210,8 @@ if (!gotLock) {
   app.whenReady().then(() => {
     createWindow();
     createToggleWindow();
+    // 2026-07-27: 통과 모드를 기본 ON으로 시작하게 했다가(위성 버튼이 다른 창에 가려지면 끌 방법이
+    // 없어 크로키 창을 아예 움직이지도 못하게 되는 문제로) 원래대로(기본 OFF, F9로 수동 전환) 되돌림.
     // F9: 어느 창에 포커스가 있든(클립스튜디오 등 다른 창이 활성 상태여도) 통과 모드를 켜고 끌 수 있는 전역 단축키
     globalShortcut.register('F9', () => setPassthrough(!passthrough));
   });

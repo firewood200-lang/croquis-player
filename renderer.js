@@ -632,9 +632,24 @@ document.addEventListener('keydown', (e) => {
 // 것처럼 보였던 것 - 창 렌더링 버그가 아니라 이 이벤트 자체의 특성 때문이었다. mousemove는
 // 커서가 이미 안에 있어도 조금만 움직이면 바로 발생하므로, 로드 후 첫 mousemove 한 번만으로도
 // hover 상태를 켜준다(그 다음부터는 mouseenter/mouseleave가 정상적으로 이어받는다).
-document.body.addEventListener('mousemove', () => window.croquisAPI.notifyHover(true), { once: true });
-document.body.addEventListener('mouseenter', () => window.croquisAPI.notifyHover(true));
-document.body.addEventListener('mouseleave', () => window.croquisAPI.notifyHover(false));
+// 2026-07-27: topBar/bottomBar 등 메뉴는 원래 CSS :hover로만 보임/숨김을 결정했는데,
+// #app 전체가 -webkit-app-region:drag라(창 이동용) 드래그 핸들이나 빈 여백을 잡고 창을
+// 옮긴 뒤 마우스 버튼을 창 "바깥"에서 놓으면, 그 순간 렌더러는 아무 이벤트도 못 받는다
+// (OS가 네이티브 드래그를 처리하는 동안 렌더러의 마우스 이벤트 스트림 자체가 끊기기 때문).
+// 그 결과 크로미움 내부의 :hover 판정이 "커서가 계속 창 안에 있다"는 상태로 멈춰버려서,
+// 실제로는 커서가 창 밖으로 완전히 나갔는데도 메뉴가 안 사라지는 버그가 생긴다.
+// 그래서 :hover 대신 JS로 직접 관리하는 hoverActive 클래스로 바꾸고(mouseenter/leave는
+// 그대로 쓰되), 창이 움직임을 멈춘 직후 메인 프로세스가 실제 커서 좌표를 확인해서 보정
+// 신호(hover-correct)를 보내주면 그 값으로 강제로 맞춘다. 위성 창(notifyHover)도 같은
+// 값을 그대로 같이 보내 동일한 버그를 같이 막는다.
+function setHoverActive(v) {
+  document.body.classList.toggle('hoverActive', v);
+  window.croquisAPI.notifyHover(v);
+}
+document.body.addEventListener('mousemove', () => setHoverActive(true), { once: true });
+document.body.addEventListener('mouseenter', () => setHoverActive(true));
+document.body.addEventListener('mouseleave', () => setHoverActive(false));
+window.croquisAPI.onHoverCorrect((inside) => setHoverActive(inside));
 
 load();
 window.croquisAPI.setAlwaysOnTop(state.settings.alwaysTop);
