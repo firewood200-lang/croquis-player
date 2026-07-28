@@ -31,7 +31,7 @@ const state = {
 
 const els = {
   imageView: $('imageView'), emptyState: $('emptyState'), timerBadge: $('timerBadge'), redFlash: $('redFlash'), zoomBadge: $('zoomBadge'),
-  btnAddImages: $('btnAddImages'), btnAddFolder: $('btnAddFolder'), btnPrev: $('btnPrev'), btnPlay: $('btnPlay'), btnNext: $('btnNext'), btnSettings: $('btnSettings'), btnMin: $('btnMin'), btnClose: $('btnClose'), btnPin: $('btnPin'), btnFullscreen: $('btnFullscreen'),
+  btnAddImages: $('btnAddImages'), btnAddFolder: $('btnAddFolder'), btnPrev: $('btnPrev'), btnPlay: $('btnPlay'), btnNext: $('btnNext'), btnSettings: $('btnSettings'), btnMin: $('btnMin'), btnClose: $('btnClose'), btnPin: $('btnPin'), btnFullscreen: $('btnFullscreen'), btnCopyImage: $('btnCopyImage'),
   navPrev: $('navPrev'), navNext: $('navNext'),
   playlistName: $('playlistName'), imageCounter: $('imageCounter'), modeLabel: $('modeLabel'), settingsDialog: $('settingsDialog'), playlistSelect: $('playlistSelect'), imageList: $('imageList'),
   videoView: $('videoView'), videoControls: $('videoControls'), btnFramePrev: $('btnFramePrev'), btnVideoPlay: $('btnVideoPlay'), btnFrameNext: $('btnFrameNext'),
@@ -475,6 +475,23 @@ els.btnFullscreen.onclick = async () => {
   const isFull = await window.croquisAPI.toggleFullscreen();
   els.btnFullscreen.classList.toggle('active', isFull);
   els.btnFullscreen.title = isFull ? '전체화면 끄기 (F11, Esc)' : '전체화면 켜기 (F11)';
+};
+// 현재 이미지를 클립보드로 복사 - alert로 매번 끊기 않도록, 버튼 텍스트를 잠깐 "복사됨!"으로
+// 바꿔서 결과를 알려주고 원래 글자로 되돌린다. 동영상일 때는 애초에 복사할 게 없으니 안내만 한다.
+let copyImageResetTimer = null;
+els.btnCopyImage.onclick = async () => {
+  const list = currentPlaylist().images;
+  if (!list.length) return;
+  const currentPath = list[state.activeIndex];
+  if (isVideoPath(currentPath)) {
+    alert('동영상은 복사할 수 없습니다. 이미지에서만 지원합니다.');
+    return;
+  }
+  const result = await window.croquisAPI.copyImageToClipboard(currentPath);
+  clearTimeout(copyImageResetTimer);
+  els.btnCopyImage.textContent = result.success ? '복사됨!' : '실패';
+  if (!result.success) console.error('이미지 복사 실패:', result.message);
+  copyImageResetTimer = setTimeout(() => { els.btnCopyImage.textContent = '복사'; }, 900);
 };
 window.croquisAPI.onFullscreenChanged((value) => {
   els.btnFullscreen.classList.toggle('active', value);

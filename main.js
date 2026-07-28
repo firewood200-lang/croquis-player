@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, globalShortcut, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -314,6 +314,19 @@ ipcMain.handle('file:toUrl', (_e, filePath) => {
   // 파일명에 #, %, ? 등이 있으면 단순 문자열 조합으로는 URL이 깨진다(#은 fragment 구분자로 해석됨) - pathToFileURL이 올바르게 인코딩해줌
   try { return pathToFileURL(filePath).href; }
   catch { return `file://${filePath.replace(/\\/g, '/')}`; }
+});
+
+// 현재 보고 있는 이미지를 OS 클립보드로 복사 - 클립스튜디오 등 다른 프로그램에 바로 붙여넣기용.
+// 동영상은 렌더러 쪽에서 아예 이 IPC를 안 부르게 막아두므로 여기서는 이미지 파일만 들어온다.
+ipcMain.handle('clipboard:copyImage', (_e, filePath) => {
+  try {
+    const img = nativeImage.createFromPath(filePath);
+    if (img.isEmpty()) return { success: false, message: '이미지를 읽을 수 없습니다.' };
+    clipboard.writeImage(img);
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
 });
 
 ipcMain.handle('drop:getPaths', (_e, items) => {

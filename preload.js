@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('croquisAPI', {
   selectImages: () => ipcRenderer.invoke('dialog:selectImages'),
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
   fileToUrl: (filePath) => ipcRenderer.invoke('file:toUrl', filePath),
+  copyImageToClipboard: (filePath) => ipcRenderer.invoke('clipboard:copyImage', filePath),
   getDropPaths: (paths) => ipcRenderer.invoke('drop:getPaths', paths),
   onAddImages: (callback) => ipcRenderer.on('add-images', (_event, paths) => callback(paths)),
   onPassthroughChanged: (callback) => ipcRenderer.on('passthrough-changed', (_event, value) => callback(value)),
