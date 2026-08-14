@@ -104,7 +104,7 @@ function createWindow() {
   mainWindow.on('focus', () => toggleWin?.moveTop());
   mainWindow.on('minimize', () => toggleWin?.hide());
   mainWindow.on('restore', () => toggleWin?.show());
-  mainWindow.on('closed', () => { toggleWin?.close(); toggleWin = null; });
+  mainWindow.on('closed', () => { toggleWin?.close(); toggleWin = null; stopMainHoverPolling(); });
   // 전체화면 버튼(툴바) 상태 동기화 - OS 단축키나 다른 경로로 전체화면이 바뀌어도
   // 렌더러의 버튼 활성 표시가 항상 실제 창 상태를 따라가게 한다.
   mainWindow.on('enter-full-screen', () => mainWindow.webContents.send('fullscreen-changed', true));
@@ -114,12 +114,49 @@ function createWindow() {
 // 통과(클릭 스루) 모드 — 켜면 mainWindow가 마우스·펜 입력을 그대로 아래 창(클립스튜디오 등)으로
 // 흘려보낸다. 곡선 원근 그리드 앱과 동일한 이유로, 다시 끄는 버튼은 mainWindow 밖의 별도
 // 위성 창(toggleWin)에 둔다 — mainWindow 안의 버튼은 통과 모드 중엔 클릭을 받을 수 없기 때문.
+//
+// 2026-08-14: forward:true였던 이전 방식을 forward:false로 바꿈. Windows에서
+// setIgnoreMouseEvents(true, {forward:true})를 쓰면 이 창과 그 아래 창(클립스튜디오 등)의
+// 커서 설정이 서로 충돌해서, 아래 창이 자기 커스텀 커서(브러시 등)를 못 그리고 OS 기본
+// 화살표로 튀는 문제가 있다는 게 확인됨(Electron 공식 이슈 #35414 - forward 옵션이 원인,
+// Electron 팀은 "not planned"로 고칠 계획 없음이라 앱 쪽에서 우회해야 함).
+// forward는 "이 창이 통과 모드 중에도 자기 렌더러로 mousemove를 계속 받을지" 여부만
+// 결정할 뿐 클릭·펜 입력이 아래 창으로 흘러가는 것 자체와는 무관해서, forward:false로
+// 바꿔도 그림 그리기 자체는 그대로 통과된다. 다만 이 forward가 위성 버튼(toggleWin)의
+// "그림 위에 마우스가 있으면 버튼이 나타난다" 기능(main-hover IPC)의 유일한 신호원이었으므로,
+// 통과 모드 중에는 그 대신 아래 startMainHoverPolling()의 커서 좌표 폴링으로 대체한다.
 function setPassthrough(value) {
   passthrough = !!value;
-  mainWindow?.setIgnoreMouseEvents(passthrough, { forward: true });
+  mainWindow?.setIgnoreMouseEvents(passthrough, { forward: false });
   mainWindow?.webContents.send('passthrough-changed', passthrough);
   toggleWin?.webContents.send('passthrough-changed', passthrough);
+  if (passthrough) startMainHoverPolling();
+  else stopMainHoverPolling();
   return passthrough;
+}
+
+// 통과 모드 중에는 mainWindow가 마우스 이벤트를 아예 못 받으므로(forward:false로 바꾼 뒤로는
+// 더더욱), renderer의 notifyHover(mousemove 기반)가 멈춘다. 그래도 위성 창의 버튼이
+// "그림 위에 마우스가 있을 때" 계속 나타나야 하므로, 통과 모드 동안만 커서 좌표를 짧은
+// 주기로 직접 확인해서 같은 신호(main-hover-changed)를 대체 전송한다.
+let mainHoverPollTimer = null;
+let lastMainHoverInside = null;
+function startMainHoverPolling() {
+  stopMainHoverPolling();
+  mainHoverPollTimer = setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !toggleWin || toggleWin.isDestroyed()) return;
+    const p = screen.getCursorScreenPoint();
+    const b = mainWindow.getBounds();
+    const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+    if (inside !== lastMainHoverInside) {
+      lastMainHoverInside = inside;
+      toggleWin.webContents.send('main-hover-changed', inside);
+    }
+  }, 120);
+}
+function stopMainHoverPolling() {
+  if (mainHoverPollTimer) { clearInterval(mainHoverPollTimer); mainHoverPollTimer = null; }
+  lastMainHoverInside = null;
 }
 
 // 레퍼런스(이미지/동영상) 표시 on/off — 예전에는 우측하단 버튼(메인 창 안)과 G키로만 껐다 켰는데,
