@@ -4,12 +4,14 @@ const fs = require('fs');
 const { pathToFileURL } = require('url');
 
 let mainWindow;
-let toggleWin; // 항상 클릭 가능한 작은 위성 창 — 통과 모드(클릭 스루) on/off + 레퍼런스 표시 on/off 버튼.
-               // 통과 모드 중에는 mainWindow 자체가 마우스를 안 받으므로, 다시 끄는 버튼은
-               // 반드시 이 별도 창에 있어야 한다(곡선 원근 그리드 앱과 동일한 이유/구조).
+// 2026-08-14: 통과 모드/레퍼런스 표시 토글용 위성 창(toggleWin)을 완전히 제거했다. 참고 이미지
+// 창 구석에 항상 겹쳐 있어야 해서(클릭 가능해야 하니 클릭 스루가 안 됨) 그 자리가 클립스튜디오로
+// 마우스를 못 넘기는 사각지대가 되는 문제가 있었고, 자리를 옮겨도 여전히 방해된다는 피드백에
+// 사용자가 "버튼을 거의 안 쓴다"며 아예 제거를 택함. 통과 모드는 F9(전역 단축키, 어느 창에
+// 포커스가 있든 항상 동작)로, 레퍼런스 표시는 G(이 창에 포커스가 있을 때만 동작, renderer.js)로
+// 계속 켜고 끌 수 있다 — 마우스로 누르는 버튼만 없어진 것.
 let passthrough = false;
-let refVisible = true; // 통과 모드 중에도(mainWindow가 클릭을 못 받는 상태에서도) 레퍼런스를
-                        // 껐다 켤 수 있어야 해서, 메인 프로세스가 상태를 들고 두 창에 전파한다.
+let refVisible = true;
 const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
 const videoExts = new Set(['.mp4', '.webm', '.mov', '.m4v']);
 const mediaExts = new Set([...imageExts, ...videoExts]);
@@ -99,12 +101,7 @@ function createWindow() {
     }
   });
 
-  mainWindow.on('move', () => { positionToggleWindow(); scheduleHoverCorrection(); });
-  mainWindow.on('resize', positionToggleWindow);
-  mainWindow.on('focus', () => toggleWin?.moveTop());
-  mainWindow.on('minimize', () => toggleWin?.hide());
-  mainWindow.on('restore', () => toggleWin?.show());
-  mainWindow.on('closed', () => { toggleWin?.close(); toggleWin = null; stopMainHoverPolling(); });
+  mainWindow.on('move', scheduleHoverCorrection);
   // 전체화면 버튼(툴바) 상태 동기화 - OS 단축키나 다른 경로로 전체화면이 바뀌어도
   // 렌더러의 버튼 활성 표시가 항상 실제 창 상태를 따라가게 한다.
   mainWindow.on('enter-full-screen', () => mainWindow.webContents.send('fullscreen-changed', true));
@@ -112,61 +109,26 @@ function createWindow() {
 }
 
 // 통과(클릭 스루) 모드 — 켜면 mainWindow가 마우스·펜 입력을 그대로 아래 창(클립스튜디오 등)으로
-// 흘려보낸다. 곡선 원근 그리드 앱과 동일한 이유로, 다시 끄는 버튼은 mainWindow 밖의 별도
-// 위성 창(toggleWin)에 둔다 — mainWindow 안의 버튼은 통과 모드 중엔 클릭을 받을 수 없기 때문.
+// 흘려보낸다. F9(전역 단축키)로만 켜고 끈다 — 예전엔 별도 위성 창(toggleWin)의 마우스 버튼으로도
+// 껐었지만, 그 위성 창이 참고 이미지 창과 겹쳐 있어 클립스튜디오로 마우스를 못 넘기는 사각지대를
+// 만드는 문제 때문에 2026-08-14에 위성 창 자체를 없앴다(자세한 배경은 아래 forward 관련 설명 참고).
 //
-// 2026-08-14: forward:true였던 이전 방식을 forward:false로 바꿈. Windows에서
+// 2026-08-14(1차): forward:true였던 이전 방식을 forward:false로 바꿈. Windows에서
 // setIgnoreMouseEvents(true, {forward:true})를 쓰면 이 창과 그 아래 창(클립스튜디오 등)의
 // 커서 설정이 서로 충돌해서, 아래 창이 자기 커스텀 커서(브러시 등)를 못 그리고 OS 기본
 // 화살표로 튀는 문제가 있다는 게 확인됨(Electron 공식 이슈 #35414 - forward 옵션이 원인,
 // Electron 팀은 "not planned"로 고칠 계획 없음이라 앱 쪽에서 우회해야 함).
-// forward는 "이 창이 통과 모드 중에도 자기 렌더러로 mousemove를 계속 받을지" 여부만
-// 결정할 뿐 클릭·펜 입력이 아래 창으로 흘러가는 것 자체와는 무관해서, forward:false로
-// 바꿔도 그림 그리기 자체는 그대로 통과된다. 다만 이 forward가 위성 버튼(toggleWin)의
-// "그림 위에 마우스가 있으면 버튼이 나타난다" 기능(main-hover IPC)의 유일한 신호원이었으므로,
-// 통과 모드 중에는 그 대신 아래 startMainHoverPolling()의 커서 좌표 폴링으로 대체한다.
 function setPassthrough(value) {
   passthrough = !!value;
   mainWindow?.setIgnoreMouseEvents(passthrough, { forward: false });
   mainWindow?.webContents.send('passthrough-changed', passthrough);
-  toggleWin?.webContents.send('passthrough-changed', passthrough);
-  if (passthrough) startMainHoverPolling();
-  else stopMainHoverPolling();
   return passthrough;
 }
 
-// 통과 모드 중에는 mainWindow가 마우스 이벤트를 아예 못 받으므로(forward:false로 바꾼 뒤로는
-// 더더욱), renderer의 notifyHover(mousemove 기반)가 멈춘다. 그래도 위성 창의 버튼이
-// "그림 위에 마우스가 있을 때" 계속 나타나야 하므로, 통과 모드 동안만 커서 좌표를 짧은
-// 주기로 직접 확인해서 같은 신호(main-hover-changed)를 대체 전송한다.
-let mainHoverPollTimer = null;
-let lastMainHoverInside = null;
-function startMainHoverPolling() {
-  stopMainHoverPolling();
-  mainHoverPollTimer = setInterval(() => {
-    if (!mainWindow || mainWindow.isDestroyed() || !toggleWin || toggleWin.isDestroyed()) return;
-    const p = screen.getCursorScreenPoint();
-    const b = mainWindow.getBounds();
-    const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
-    if (inside !== lastMainHoverInside) {
-      lastMainHoverInside = inside;
-      toggleWin.webContents.send('main-hover-changed', inside);
-    }
-  }, 120);
-}
-function stopMainHoverPolling() {
-  if (mainHoverPollTimer) { clearInterval(mainHoverPollTimer); mainHoverPollTimer = null; }
-  lastMainHoverInside = null;
-}
-
-// 레퍼런스(이미지/동영상) 표시 on/off — 예전에는 우측하단 버튼(메인 창 안)과 G키로만 껐다 켰는데,
-// 통과 모드가 켜진 동안은 mainWindow 자체가 클릭을 못 받아 그 버튼도 눌리지 않는 문제가 있었다.
-// 그래서 통과 모드 버튼과 같은 위성 창에 이 버튼도 같이 두어, 통과 모드 여부와 무관하게
-// 항상 마우스로 켜고 끌 수 있게 한다.
+// 레퍼런스(이미지/동영상) 표시 on/off — G 키(이 창에 포커스가 있을 때만 동작, renderer.js)로 켜고 끈다.
 function setRefVisible(value) {
   refVisible = !!value;
   mainWindow?.webContents.send('ref-visible-changed', refVisible);
-  toggleWin?.webContents.send('ref-visible-changed', refVisible);
   return refVisible;
 }
 
@@ -187,53 +149,6 @@ function scheduleHoverCorrection() {
   }, 250);
 }
 
-function positionToggleWindow() {
-  if (!mainWindow || !toggleWin) return;
-  const b = mainWindow.getBounds();
-  // (이력 - 2026-07-17~23) 원래는 창의 우측 하단 여백에 완전히 겹쳐 놓았었다 - 이미지가 꽉 찬
-  // 상태에서도 구석의 빈 공간을 쓰도록. #bottomBar(재생목록·카운터 텍스트)와 겹쳐 보인다는
-  // 피드백으로 오프셋을 여러 번 조정했었음(46 -> 90, 동영상 재생 중 158까지 올렸다가 다시 90으로
-  // 통합). style.css의 .cornerBtn(투명도 버튼) bottom 값도 이 시절에 같이 맞춰둔 것.
-  //
-  // 2026-08-14: 이 창(toggleWin)은 통과 모드(F9)를 다시 끄는 유일한 방법이라 설계상 항상 실제
-  // 클릭을 받아야 하고, 그래서 통과 모드 중에도 절대 클릭 스루가 안 된다. 그런데 참고 이미지
-  // 창의 구석에 완전히 겹쳐 놓다 보니, 그림(인물 등)이 구석까지 꽉 찬 이미지에서는 그 자리가
-  // "클립스튜디오로 마우스를 못 넘기는 사각지대"가 되어 브러시 커서가 계속 시스템 화살표로
-  // 바뀌는 문제로 이어졌다(사용자 확인, 참고: forward:true 관련 커서 버그 수정과는 별개 원인).
-  // 그래서 참고 창 구석에 살짝만 걸치고 나머지 대부분은 창 밖으로 빠져나가게 옮긴다 - 이미지
-  // 내용과의 겹침은 거의 사라지고, 구석에 여전히 시각적으로 붙어 있어 찾기는 쉽다.
-  const overlapX = 18; // 참고 창과 겹치는 폭(전체 100px 중 18px만 겹침, 나머지 82px는 창 밖)
-  const overlapY = 18; // 참고 창과 겹치는 높이(전체 44px 중 18px만 겹침, 나머지 26px는 창 밖)
-  toggleWin.setPosition(Math.round(b.x + b.width - overlapX), Math.round(b.y + b.height - overlapY));
-}
-
-function createToggleWindow() {
-  toggleWin = new BrowserWindow({
-    width: 100,
-    height: 44,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    movable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    hasShadow: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload-toggle.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  });
-  toggleWin.loadFile('passthrough-toggle.html');
-  toggleWin.setAlwaysOnTop(true, 'screen-saver');
-  positionToggleWindow();
-  // (2026-07-21에 여기 있던 hide/show + 리사이즈 강제 다시 그리기 코드는 "창이 처음에 화면에
-  // 합성이 안 된다"는 잘못된 진단에 따른 우회책이었다. 2026-07-22에 진짜 원인을 찾았다 -
-  // renderer.js의 mouseenter가 커서가 이미 창 안에 있는 상태로 시작하면 발생하지 않는 문제였고,
-  // 그건 mainWindow의 renderer.js에 mousemove 보완을 추가해 근본적으로 고쳤다. 그래서 여기 있던
-  // 우회책은 불필요한 깜빡임만 만들어 제거했다.)
-}
-
 // 중복 실행 방지: 이미 켜져 있으면 새 인스턴스는 종료하고, 넘어온 이미지만 기존 창에 전달
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -252,9 +167,6 @@ if (!gotLock) {
   });
   app.whenReady().then(() => {
     createWindow();
-    createToggleWindow();
-    // 2026-07-27: 통과 모드를 기본 ON으로 시작하게 했다가(위성 버튼이 다른 창에 가려지면 끌 방법이
-    // 없어 크로키 창을 아예 움직이지도 못하게 되는 문제로) 원래대로(기본 OFF, F9로 수동 전환) 되돌림.
     // F9: 어느 창에 포커스가 있든(클립스튜디오 등 다른 창이 활성 상태여도) 통과 모드를 켜고 끌 수 있는 전역 단축키
     globalShortcut.register('F9', () => setPassthrough(!passthrough));
   });
@@ -294,13 +206,6 @@ ipcMain.handle('window:toggleFullscreen', () => {
 ipcMain.handle('window:exitFullscreen', () => {
   if (mainWindow?.isFullScreen()) mainWindow.setFullScreen(false);
   return false;
-});
-
-// 2026-07-17: 메인 창(그림) 위에 마우스가 있는지 위성 창(통과 모드/레퍼런스 버튼)에 전달 -
-// 위성 창 버튼이 "그림 위에 마우스를 올렸을 때"도 같이 나타나게 하기 위함(위성 창은 화면
-// 모서리에 겹쳐진 아주 작은 별도 창이라, 그 창 자체만 hover해서는 이 요구를 못 채움).
-ipcMain.on('main-hover', (_e, value) => {
-  toggleWin?.webContents.send('main-hover-changed', !!value);
 });
 
 // 그림 비율에 맞게 창 크기 자동 조정(설정에서 켠 경우에만 렌더러가 호출).
