@@ -190,15 +190,21 @@ function scheduleHoverCorrection() {
 function positionToggleWindow() {
   if (!mainWindow || !toggleWin) return;
   const b = mainWindow.getBounds();
-  // 창의 우측 하단 여백에 겹쳐 놓는다 - 이미지가 꽉 찬 상태에서도 구석의 빈 공간을 쓰도록.
-  // 2026-07-17: #bottomBar(재생목록·카운터 텍스트, bottom:10px)와 겹쳐 보인다는 피드백으로
-  // 46 -> 90으로 한 칸(+44px) 올림. style.css의 .cornerBtn(투명도 버튼) bottom 값도 같이 맞춰뒀다.
-  // 2026-07-21~22: 동영상 재생 중일 때만 #videoControls와 안 겹치게 90 -> 158까지 여러 차례
-  // 올렸다 내렸다 했었지만, 2026-07-23에 프레임바 자체를 상단 메뉴처럼 압축해 .cornerBtn과
-  // 같은 줄(하단바 바로 위, bottom:51px)에 넣는 통합 레이아웃으로 바꾸면서, 이미지/동영상
-  // 구분 없이 항상 같은 90으로 고정한다 - videoActive 분기(및 이를 위한 IPC)는 더 이상 필요 없어 제거.
-  const offset = 90;
-  toggleWin.setPosition(Math.round(b.x + b.width - 104), Math.round(b.y + b.height - offset));
+  // (이력 - 2026-07-17~23) 원래는 창의 우측 하단 여백에 완전히 겹쳐 놓았었다 - 이미지가 꽉 찬
+  // 상태에서도 구석의 빈 공간을 쓰도록. #bottomBar(재생목록·카운터 텍스트)와 겹쳐 보인다는
+  // 피드백으로 오프셋을 여러 번 조정했었음(46 -> 90, 동영상 재생 중 158까지 올렸다가 다시 90으로
+  // 통합). style.css의 .cornerBtn(투명도 버튼) bottom 값도 이 시절에 같이 맞춰둔 것.
+  //
+  // 2026-08-14: 이 창(toggleWin)은 통과 모드(F9)를 다시 끄는 유일한 방법이라 설계상 항상 실제
+  // 클릭을 받아야 하고, 그래서 통과 모드 중에도 절대 클릭 스루가 안 된다. 그런데 참고 이미지
+  // 창의 구석에 완전히 겹쳐 놓다 보니, 그림(인물 등)이 구석까지 꽉 찬 이미지에서는 그 자리가
+  // "클립스튜디오로 마우스를 못 넘기는 사각지대"가 되어 브러시 커서가 계속 시스템 화살표로
+  // 바뀌는 문제로 이어졌다(사용자 확인, 참고: forward:true 관련 커서 버그 수정과는 별개 원인).
+  // 그래서 참고 창 구석에 살짝만 걸치고 나머지 대부분은 창 밖으로 빠져나가게 옮긴다 - 이미지
+  // 내용과의 겹침은 거의 사라지고, 구석에 여전히 시각적으로 붙어 있어 찾기는 쉽다.
+  const overlapX = 18; // 참고 창과 겹치는 폭(전체 100px 중 18px만 겹침, 나머지 82px는 창 밖)
+  const overlapY = 18; // 참고 창과 겹치는 높이(전체 44px 중 18px만 겹침, 나머지 26px는 창 밖)
+  toggleWin.setPosition(Math.round(b.x + b.width - overlapX), Math.round(b.y + b.height - overlapY));
 }
 
 function createToggleWindow() {
