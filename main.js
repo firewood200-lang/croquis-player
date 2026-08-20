@@ -106,6 +106,16 @@ function createWindow() {
   // 렌더러의 버튼 활성 표시가 항상 실제 창 상태를 따라가게 한다.
   mainWindow.on('enter-full-screen', () => mainWindow.webContents.send('fullscreen-changed', true));
   mainWindow.on('leave-full-screen', () => mainWindow.webContents.send('fullscreen-changed', false));
+
+  // 2026-08-20: 아래 hoverCheckTimer는 "창을 옮긴 직후"에만 보정한다. 하지만 창을 전혀
+  // 옮기지 않아도(마우스만 창 가장자리를 빠르게 스쳐 지나갈 때 등) mouseleave 자체가 씹히는
+  // 경우가 있고, 이때는 클립스튜디오 캔버스를 클릭해도 이 창의 렌더러는 그 클릭 이벤트를 아예
+  // 받지 못하므로(다른 창에서 일어난 일이라) 메뉴가 영영 안 사라지는 버그가 있었다. 그래서
+  // 트리거(이동/클릭 등)에 기대지 않고, 이 창이 떠 있는 동안 항상 일정 주기로 실제 커서 좌표를
+  // 확인해서 스스로 보정하도록 한다. 최악의 경우에도 이 주기(500ms) 안에는 항상 맞는 상태로
+  // 돌아온다.
+  startHoverPolling();
+  mainWindow.on('closed', stopHoverPolling);
 }
 
 // 통과(클릭 스루) 모드 — 켜면 mainWindow가 마우스·펜 입력을 그대로 아래 창(클립스튜디오 등)으로
@@ -137,16 +147,30 @@ function setRefVisible(value) {
 // 크로미움의 :hover 판정이 "커서가 계속 창 안에 있다"로 멈춰버리는 문제가 있었다(메뉴가 안
 // 사라지는 버그의 원인). 그래서 창이 움직임을 멈춘 직후(연속된 move 이벤트가 250ms간 없을 때)
 // 실제 커서의 화면 좌표를 확인해서, 창 밖에 있으면 렌더러에 "hover 아님"을 강제로 알려준다.
+function checkHoverNow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const p = screen.getCursorScreenPoint();
+  const b = mainWindow.getBounds();
+  const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+  mainWindow.webContents.send('hover-correct', inside);
+}
+
 let hoverCheckTimer = null;
 function scheduleHoverCorrection() {
   clearTimeout(hoverCheckTimer);
-  hoverCheckTimer = setTimeout(() => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    const p = screen.getCursorScreenPoint();
-    const b = mainWindow.getBounds();
-    const inside = p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
-    mainWindow.webContents.send('hover-correct', inside);
-  }, 250);
+  hoverCheckTimer = setTimeout(checkHoverNow, 250);
+}
+
+// 2026-08-20: 위 scheduleHoverCorrection(창 이동 트리거)과 별개로 돌아가는 상시 안전망.
+// 이동 여부와 무관하게 500ms마다 커서 위치를 재확인해서 hoverActive 상태가 절대 영구히
+// 어긋난 채로 남지 않도록 한다.
+let hoverPollTimer = null;
+function startHoverPolling() {
+  stopHoverPolling();
+  hoverPollTimer = setInterval(checkHoverNow, 500);
+}
+function stopHoverPolling() {
+  if (hoverPollTimer) { clearInterval(hoverPollTimer); hoverPollTimer = null; }
 }
 
 // 중복 실행 방지: 이미 켜져 있으면 새 인스턴스는 종료하고, 넘어온 이미지만 기존 창에 전달
